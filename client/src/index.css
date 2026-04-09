@@ -1,0 +1,207 @@
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Running-inspired palette: dark slate surfaces, electric green accent */
+    /* Background */
+    --background: 220 16% 10%;
+    --foreground: 210 12% 92%;
+
+    /* Cards / Surfaces */
+    --card: 220 14% 13%;
+    --card-foreground: 210 12% 92%;
+
+    /* Popover */
+    --popover: 220 14% 13%;
+    --popover-foreground: 210 12% 92%;
+
+    /* Primary accent — electric lime green (runner energy) */
+    --primary: 82 88% 47%;
+    --primary-foreground: 220 16% 8%;
+
+    /* Secondary */
+    --secondary: 220 12% 20%;
+    --secondary-foreground: 210 10% 80%;
+
+    /* Muted */
+    --muted: 220 12% 18%;
+    --muted-foreground: 210 8% 55%;
+
+    /* Accent */
+    --accent: 82 60% 30%;
+    --accent-foreground: 82 88% 80%;
+
+    /* Destructive */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Border */
+    --border: 220 10% 22%;
+
+    /* Input */
+    --input: 220 10% 22%;
+
+    /* Ring */
+    --ring: 82 88% 47%;
+
+    --radius: 0.5rem;
+
+    /* Chart colors */
+    --chart-1: 82 88% 47%;
+    --chart-2: 200 80% 50%;
+    --chart-3: 35 90% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 0 72% 51%;
+  }
+
+  /* Light mode */
+  .light {
+    --background: 0 0% 98%;
+    --foreground: 220 16% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 16% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 16% 12%;
+    --primary: 82 70% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 8% 94%;
+    --secondary-foreground: 220 12% 30%;
+    --muted: 220 8% 94%;
+    --muted-foreground: 220 8% 46%;
+    --accent: 82 50% 90%;
+    --accent-foreground: 82 70% 25%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 10% 88%;
+    --input: 220 10% 88%;
+    --ring: 82 70% 35%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Satoshi', 'Inter', system-ui, sans-serif;
+    min-height: 100dvh;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cabinet Grotesk', 'Satoshi', system-ui, sans-serif;
+    font-weight: 700;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  img, svg {
+    display: block;
+    max-width: 100%;
+  }
+}
+
+/* ─── Custom utilities ─────────────────────────────────────────────────────── */
+.race-card-hover {
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 150ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.race-card-hover:hover {
+  transform: translateY(-2px);
+  @apply border-primary/40;
+}
+
+.badge-trail {
+  @apply bg-emerald-900/40 text-emerald-400 border border-emerald-800;
+}
+.badge-road {
+  @apply bg-blue-900/40 text-blue-400 border border-blue-800;
+}
+.badge-mixed {
+  @apply bg-violet-900/40 text-violet-400 border border-violet-800;
+}
+.badge-open {
+  @apply bg-green-900/40 text-green-400 border border-green-800;
+}
+.badge-closed {
+  @apply bg-red-900/40 text-red-400 border border-red-800;
+}
+.badge-unknown, .badge-tbc {
+  @apply bg-yellow-900/40 text-yellow-400 border border-yellow-800;
+}
+.badge-new {
+  @apply bg-primary/20 text-primary border border-primary/40;
+}
+
+.badge-track {
+  @apply bg-orange-900/40 text-orange-400 border border-orange-800;
+}
+.badge-fun_run {
+  @apply bg-purple-900/40 text-purple-400 border border-purple-800;
+}
+.badge-recovery {
+  @apply bg-amber-900/40 text-amber-400 border border-amber-800;
+}
+
+/* Light mode badge overrides */
+.light .badge-trail { @apply bg-emerald-100 text-emerald-700 border-emerald-200; }
+.light .badge-road { @apply bg-blue-100 text-blue-700 border-blue-200; }
+.light .badge-mixed { @apply bg-violet-100 text-violet-700 border-violet-200; }
+.light .badge-open { @apply bg-green-100 text-green-700 border-green-200; }
+.light .badge-closed { @apply bg-red-100 text-red-700 border-red-200; }
+.light .badge-unknown, .light .badge-tbc { @apply bg-yellow-100 text-yellow-700 border-yellow-200; }
+.light .badge-new { @apply bg-primary/10 text-primary border-primary/20; }
+.light .badge-track { @apply bg-orange-100 text-orange-700 border-orange-200; }
+.light .badge-fun_run { @apply bg-purple-100 text-purple-700 border-purple-200; }
+.light .badge-recovery { @apply bg-amber-100 text-amber-700 border-amber-200; }
+
+/* Filter chip active state */
+.filter-chip-active {
+  @apply bg-primary text-primary-foreground;
+}
+.filter-chip {
+  @apply bg-muted text-muted-foreground hover:bg-secondary hover:text-foreground cursor-pointer transition-colors;
+}
+
+/* Glow effect for accent elements */
+.glow-primary {
+  box-shadow: 0 0 20px hsl(var(--primary) / 0.25);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: hsl(var(--background)); }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--secondary)) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
