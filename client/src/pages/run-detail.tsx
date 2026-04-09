@@ -10,7 +10,9 @@ import {
   ChevronLeft, MapPin, Clock, Users, Star, Send,
   Mountain, Route, CircleDot, Smile, Heart, Calendar,
   Ruler, Gauge, CheckCircle, XCircle, AlertTriangle, X,
+  Crown, Lock,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 
 
@@ -302,6 +304,10 @@ function MapPlaceholder({ run }: { run: RunDetail }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function RunDetailPage() {
   const { user: currentUser } = useAuth();
+  const { data: subStatus } = useQuery<{ isPremium: boolean; role: string }>({
+    queryKey: ["/api/subscription/status"],
+  });
+  const canChat = subStatus?.isPremium || subStatus?.role === "admin";
   const CURRENT_USER_ID = currentUser?.id ?? 1;
   const params = useParams<{ id: string }>();
   const runId = Number(params.id);
@@ -598,25 +604,44 @@ export default function RunDetailPage() {
           </div>
           {/* Chat input */}
           {(isJoined || isHost) ? (
-            <div className="px-3 py-2 border-t border-border flex gap-2">
-              <input
-                type="text"
-                placeholder="Message the group…"
-                value={chatMsg}
-                onChange={(e) => setChatMsg(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMsg()}
-                className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                data-testid="input-chat"
-              />
-              <button
-                onClick={handleSendMsg}
-                disabled={!chatMsg.trim() || msgMutation.isPending}
-                className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-all flex-shrink-0"
-                data-testid="button-send-msg"
-              >
-                <Send size={14} />
-              </button>
-            </div>
+            canChat ? (
+              <div className="px-3 py-2 border-t border-border flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Message the group…"
+                  value={chatMsg}
+                  onChange={(e) => setChatMsg(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMsg()}
+                  className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  data-testid="input-chat"
+                />
+                <button
+                  onClick={handleSendMsg}
+                  disabled={!chatMsg.trim() || msgMutation.isPending}
+                  className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-all flex-shrink-0"
+                  data-testid="button-send-msg"
+                >
+                  <Send size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="px-3 py-2.5 border-t border-border">
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5 flex items-center gap-2.5">
+                  <Crown className="w-4 h-4 text-amber-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300">Chat is a Premium feature</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">HK$30/month — upgrade to join the conversation</p>
+                  </div>
+                  <a
+                    href="/#/subscription"
+                    className="shrink-0 text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                    data-testid="link-upgrade-chat"
+                  >
+                    <Lock size={11} /> Upgrade
+                  </a>
+                </div>
+              </div>
+            )
           ) : (
             <div className="px-4 py-2.5 border-t border-border">
               <p className="text-xs text-muted-foreground text-center">Join this run to chat with the group</p>

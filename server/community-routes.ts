@@ -103,6 +103,21 @@ export function registerCommunityRoutes(app: Express) {
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid data", details: parsed.error.flatten() });
       }
+
+      // ── Free user run limit: max 2 hosted runs per calendar month ─────────────
+      const hostCheck = await storage.getUserById(parsed.data.hostId);
+      const isAdminHost = (hostCheck as any)?.role === 'admin';
+      const isPremiumHost = (hostCheck as any)?.isPremium === true;
+      if (!isAdminHost && !isPremiumHost) {
+        const runsThisMonth = await storage.getRunsHostedThisMonth(parsed.data.hostId);
+        if (runsThisMonth >= 2) {
+          return res.status(403).json({
+            error: "FREE_LIMIT_REACHED",
+            message: "Free accounts can only host 2 runs per month. Upgrade to Premium to host unlimited runs.",
+          });
+        }
+      }
+
       const now = new Date().toISOString();
       const run = await storage.insertCommunityRun({
         ...parsed.data,
@@ -196,6 +211,17 @@ export function registerCommunityRoutes(app: Express) {
 
       const parsed = createMessageSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "Invalid message" });
+
+      // ── Free users cannot use the chat room ───────────────────────────────────
+      const chatter = await storage.getUserById(parsed.data.userId);
+      const chatterIsAdmin = (chatter as any)?.role === 'admin';
+      const chatterIsPremium = (chatter as any)?.isPremium === true;
+      if (!chatterIsAdmin && !chatterIsPremium) {
+        return res.status(403).json({
+          error: "PREMIUM_REQUIRED",
+          message: "Chat is a Premium feature. Upgrade to Premium to join the conversation.",
+        });
+      }
 
       const msg = await storage.insertMessage({
         runId: run.id,

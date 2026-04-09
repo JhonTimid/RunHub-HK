@@ -140,6 +140,12 @@ export const users = pgTable("users", {
   googleId: text("google_id"),
   googleAvatar: text("google_avatar"),
   authProvider: text("auth_provider").notNull().default("local"),
+  // ── Subscription & roles ────────────────────────────────────────────────────
+  role: text("role").notNull().default("user"),            // 'user' | 'admin'
+  isPremium: boolean("is_premium").notNull().default(false),
+  premiumUntil: text("premium_until"),                     // ISO date string
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });

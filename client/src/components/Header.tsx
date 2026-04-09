@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Bell, Sun, Moon, Users, LogOut, LayoutDashboard, ChevronDown } from "lucide-react";
+import { Bell, Sun, Moon, Users, LogOut, LayoutDashboard, ChevronDown, Crown, ShieldCheck, Zap } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -106,20 +106,28 @@ export default function Header() {
                 className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
                 data-testid="button-user-menu"
               >
-                {user.googleAvatar ? (
-                  <img
-                    src={user.googleAvatar}
-                    alt={user.name}
-                    className="w-7 h-7 rounded-full object-cover"
-                  />
-                ) : (
-                  <span
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                    style={{ background: user.avatarColor }}
-                  >
-                    {user.avatarInitials}
-                  </span>
-                )}
+                <div className="relative">
+                  {user.googleAvatar ? (
+                    <img
+                      src={user.googleAvatar}
+                      alt={user.name}
+                      className="w-7 h-7 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                      style={{ background: user.avatarColor }}
+                    >
+                      {user.avatarInitials}
+                    </span>
+                  )}
+                  {(user as any).isPremium && (
+                    <Crown size={10} className="absolute -top-1 -right-1 text-amber-400 fill-amber-400" />
+                  )}
+                  {(user as any).role === "admin" && (
+                    <ShieldCheck size={10} className="absolute -top-1 -right-1 text-primary fill-primary/20" />
+                  )}
+                </div>
                 <ChevronDown size={12} className="text-muted-foreground" />
               </button>
 
@@ -129,6 +137,16 @@ export default function Header() {
                   <div className="px-3 py-2.5 border-b border-border">
                     <p className="text-sm font-semibold text-foreground truncate">{user.name}</p>
                     <p className="text-xs text-muted-foreground truncate">@{user.handle}</p>
+                    {(user as any).role === "admin" && (
+                      <span className="inline-flex items-center gap-1 mt-1 text-xs font-medium text-primary">
+                        <ShieldCheck size={10} /> Admin
+                      </span>
+                    )}
+                    {(user as any).role !== "admin" && (user as any).isPremium && (
+                      <span className="inline-flex items-center gap-1 mt-1 text-xs font-medium text-amber-500">
+                        <Crown size={10} /> Premium
+                      </span>
+                    )}
                   </div>
 
                   <Link href="/community/dashboard">
@@ -141,6 +159,43 @@ export default function Header() {
                       My Runs Dashboard
                     </a>
                   </Link>
+
+                  {/* Subscription link */}
+                  {(user as any).role !== "admin" && (
+                    <Link href="/subscription">
+                      <a
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted transition-colors no-underline"
+                        onClick={() => setMenuOpen(false)}
+                        data-testid="menu-subscription"
+                      >
+                        {(user as any).isPremium ? (
+                          <>
+                            <Crown size={14} className="text-amber-400" />
+                            <span className="text-foreground">Premium Plan</span>
+                          </>
+                        ) : (
+                          <>
+                            <Zap size={14} className="text-primary" />
+                            <span className="text-primary font-medium">Upgrade to Premium</span>
+                          </>
+                        )}
+                      </a>
+                    </Link>
+                  )}
+
+                  {/* Admin link — only for admins */}
+                  {(user as any).role === "admin" && (
+                    <Link href="/admin">
+                      <a
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors no-underline"
+                        onClick={() => setMenuOpen(false)}
+                        data-testid="menu-admin"
+                      >
+                        <ShieldCheck size={14} className="text-primary" />
+                        Admin Dashboard
+                      </a>
+                    </Link>
+                  )}
 
                   <button
                     onClick={handleLogout}

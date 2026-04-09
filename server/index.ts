@@ -7,7 +7,10 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { seedIfEmpty } from "./seed";
 import { seedCommunityData } from "./community-seed";
+import { seedAdminAccount } from "./admin-seed";
 import { registerCommunityRoutes } from "./community-routes";
+import { registerSubscriptionRoutes } from "./subscription-routes";
+import { registerAdminRoutes } from "./admin-routes";
 import passport from "./auth";
 import { registerAuthRoutes } from "./auth-routes";
 import { initDb, pool } from "./storage";
@@ -93,9 +96,12 @@ app.use((req, res, next) => {
   await initDb();
   await seedIfEmpty();
   await seedCommunityData();
+  await seedAdminAccount();
   registerAuthRoutes(app);
   await registerRoutes(httpServer, app);
   registerCommunityRoutes(app);
+  registerSubscriptionRoutes(app);
+  registerAdminRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

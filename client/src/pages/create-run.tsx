@@ -5,7 +5,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
 import { useAuth } from "@/context/AuthContext";
-import { ChevronLeft, MapPin, Calendar, Clock, Route, Mountain, CircleDot, Smile, Heart, Users, Ruler, Gauge, Globe, Lock } from "lucide-react";
+import { ChevronLeft, MapPin, Calendar, Clock, Route, Mountain, CircleDot, Smile, Heart, Users, Ruler, Gauge, Globe, Lock, Crown, Zap } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 
 
@@ -33,6 +34,12 @@ export default function CreateRunPage() {
   const CURRENT_USER_ID = currentUser?.id ?? 1;
   const [, navigate] = useLocation();
   const { toast } = useToast();
+
+  // Subscription status
+  const { data: subStatus } = useQuery<{ isPremium: boolean; role: string }>({
+    queryKey: ["/api/subscription/status"],
+  });
+  const isPremium = subStatus?.isPremium || subStatus?.role === "admin";
 
   const [form, setForm] = useState({
     title: "",
@@ -83,15 +90,25 @@ export default function CreateRunPage() {
       if (form.description) payload.description = form.description.trim();
 
       const res = await apiRequest("POST", "/api/community/runs", payload);
-      return res.json();
+      const data = await res.json();
+      if (data.error === "FREE_LIMIT_REACHED") throw new Error("FREE_LIMIT_REACHED");
+      return data;
     },
     onSuccess: (run) => {
       queryClient.invalidateQueries({ queryKey: ["/api/community/runs"] });
       toast({ title: "Run created!", description: "Your run is now live in the community feed." });
       navigate(`/community/run/${run.id}`);
     },
-    onError: () => {
-      toast({ title: "Error", description: "Could not create run. Please try again.", variant: "destructive" });
+    onError: (e: any) => {
+      if (e?.message === "FREE_LIMIT_REACHED" || String(e).includes("FREE_LIMIT_REACHED")) {
+        toast({
+          title: "Monthly limit reached",
+          description: "Free accounts can host up to 2 runs per month. Upgrade to Premium for unlimited hosting.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Error", description: "Could not create run. Please try again.", variant: "destructive" });
+      }
     },
   });
 
@@ -122,7 +139,25 @@ export default function CreateRunPage() {
         </button>
 
         <h1 className="text-xl font-display font-bold text-foreground mb-1">Host a Run</h1>
-        <p className="text-sm text-muted-foreground mb-6">Organise a group run and invite the community</p>
+        <p className="text-sm text-muted-foreground mb-4">Organise a group run and invite the community</p>
+
+        {/* Free user limit banner */}
+        {!isPremium && (
+          <div className="mb-5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 flex items-start gap-3">
+            <Crown className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Free plan: 2 hosted runs per month</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Upgrade to Premium for unlimited hosting — HK$30/month</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/subscription")}
+              className="shrink-0 text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+            >
+              <Zap className="w-3 h-3" /> Upgrade
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Run Type */}

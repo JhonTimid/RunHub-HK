@@ -15,6 +15,8 @@ import CommunityFeedPage from "@/pages/community-feed";
 import CreateRunPage from "@/pages/create-run";
 import RunDetailPage from "@/pages/run-detail";
 import HostDashboardPage from "@/pages/host-dashboard";
+import SubscriptionPage from "@/pages/subscription";
+import AdminPage from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 // Redirect to login if not authenticated
@@ -60,6 +62,12 @@ function AppRoutes() {
         </Route>
         <Route path="/community/dashboard">
           {() => <ProtectedRoute component={HostDashboardPage} />}
+        </Route>
+        <Route path="/subscription">
+          {() => <ProtectedRoute component={SubscriptionPage} />}
+        </Route>
+        <Route path="/admin">
+          {() => <ProtectedRoute component={AdminPage} />}
         </Route>
         <Route component={NotFound} />
       </Switch>

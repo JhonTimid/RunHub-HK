@@ -67,8 +67,19 @@ export async function initDb() {
       password_hash TEXT,
       google_id TEXT,
       google_avatar TEXT,
-      auth_provider TEXT NOT NULL DEFAULT 'local'
+      auth_provider TEXT NOT NULL DEFAULT 'local',
+      role TEXT NOT NULL DEFAULT 'user',
+      is_premium BOOLEAN NOT NULL DEFAULT false,
+      premium_until TEXT,
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT
     );
+    -- Add new columns to existing users table if they don't exist yet
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
     CREATE TABLE IF NOT EXISTS community_runs (
       id SERIAL PRIMARY KEY,
       host_id INTEGER NOT NULL,
@@ -155,6 +166,16 @@ export interface IStorage {
   insertUser(user: InsertUser): Promise<User>;
   updateUserStats(id: number, data: Partial<User>): Promise<void>;
   updateUserGoogleAvatar(id: number, avatar: string): Promise<void>;
+  updateUserSubscription(id: number, data: {
+    isPremium: boolean;
+    premiumUntil: string | null;
+    stripeCustomerId?: string | null;
+    stripeSubscriptionId?: string | null;
+  }): Promise<void>;
+  getRunsHostedThisMonth(userId: number): Promise<number>;
+  getAllUsersAdmin(): Promise<User[]>;
+  setUserRole(id: number, role: string): Promise<void>;
+  getUserByStripeCustomerId(customerId: string): Promise<User | undefined>;
 
   getAllCommunityRuns(opts?: { hostId?: number; status?: string }): Promise<CommunityRun[]>;
   getCommunityRunById(id: number): Promise<CommunityRun | undefined>;
@@ -241,6 +262,25 @@ export const storage: IStorage = {
   },
   async updateUserGoogleAvatar(id, avatar) {
     await db.update(users).set({ googleAvatar: avatar }).where(eq(users.id, id));
+  },
+  async updateUserSubscription(id, data) {
+    await db.update(users).set(data as any).where(eq(users.id, id));
+  },
+  async getRunsHostedThisMonth(userId) {
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const all = await db.select().from(communityRuns)
+      .where(eq(communityRuns.hostId, userId));
+    return all.filter(r => r.createdAt >= monthStart).length;
+  },
+  async getAllUsersAdmin() {
+    return db.select().from(users);
+  },
+  async setUserRole(id, role) {
+    await db.update(users).set({ role } as any).where(eq(users.id, id));
+  },
+  async getUserByStripeCustomerId(customerId) {
+    return db.select().from(users).where(eq(users.stripeCustomerId, customerId)).then(r => r[0]);
   },
 
   async getAllCommunityRuns(opts = {}) {
