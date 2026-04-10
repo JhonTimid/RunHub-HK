@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">RunHub HK</string>
+    <string name="title_activity_main">RunHub HK</string>
+    <string name="package_name">hk.runhub.app</string>
+    <string name="custom_url_scheme">hk.runhub.app</string>
+</resources>
