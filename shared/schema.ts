@@ -19,6 +19,8 @@ export const races = pgTable("races", {
   sourceName: text("source_name"),
   description: text("description"),
   isNew: boolean("is_new").notNull().default(true),
+  instagramPostUrl: text("instagram_post_url"),
+  instagramAccount: text("instagram_account"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });

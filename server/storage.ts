@@ -38,6 +38,8 @@ export async function initDb() {
       source_name TEXT,
       description TEXT,
       is_new BOOLEAN NOT NULL DEFAULT true,
+      instagram_post_url TEXT,
+      instagram_account TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -80,6 +82,9 @@ export async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+    -- Instagram columns on races
+    ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_post_url TEXT;
+    ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_account TEXT;
     CREATE TABLE IF NOT EXISTS community_runs (
       id SERIAL PRIMARY KEY,
       host_id INTEGER NOT NULL,
