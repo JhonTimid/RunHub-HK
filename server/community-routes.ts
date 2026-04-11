@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { storage } from "./storage";
 import { z } from "zod";
 import type { CommunityRun } from "../shared/schema";
+import { requireAuth } from "./middleware/requireAuth";
+import { requirePremium } from "./middleware/requirePremium";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 async function enrichRun(run: CommunityRun) {
@@ -16,7 +18,6 @@ async function enrichRun(run: CommunityRun) {
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 const createRunSchema = z.object({
-  hostId: z.number(),
   title: z.string().min(3),
   runType: z.enum(["road", "trail", "track", "fun_run", "recovery"]),
   date: z.string(),
@@ -33,12 +34,10 @@ const createRunSchema = z.object({
 });
 
 const createMessageSchema = z.object({
-  userId: z.number(),
   message: z.string().min(1),
 });
 
 const createRatingSchema = z.object({
-  raterId: z.number(),
   stars: z.number().int().min(1).max(5),
   review: z.string().optional(),
 });
@@ -61,7 +60,6 @@ export function registerCommunityRoutes(app: Express) {
         );
       }
 
-      // Filter by type
       const type = req.query.type as string | undefined;
       if (type && type !== "all") {
         runs = runs.filter(r => r.runType === type);
@@ -97,19 +95,19 @@ export function registerCommunityRoutes(app: Express) {
   });
 
   // ─── POST /api/community/runs ─────────────────────────────────────────────
-  app.post("/api/community/runs", async (req, res) => {
+  app.post("/api/community/runs", requireAuth, async (req, res) => {
     try {
+      const sessionUser = req.user as any;
       const parsed = createRunSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid data", details: parsed.error.flatten() });
       }
 
       // ── Free user run limit: max 2 hosted runs per calendar month ─────────────
-      const hostCheck = await storage.getUserById(parsed.data.hostId);
-      const isAdminHost = (hostCheck as any)?.role === 'admin';
-      const isPremiumHost = (hostCheck as any)?.isPremium === true;
-      if (!isAdminHost && !isPremiumHost) {
-        const runsThisMonth = await storage.getRunsHostedThisMonth(parsed.data.hostId);
+      const isAdmin = sessionUser?.role === "admin";
+      const isPremium = sessionUser?.isPremium === true;
+      if (!isAdmin && !isPremium) {
+        const runsThisMonth = await storage.getRunsHostedThisMonth(sessionUser.id);
         if (runsThisMonth >= 2) {
           return res.status(403).json({
             error: "FREE_LIMIT_REACHED",
@@ -121,6 +119,7 @@ export function registerCommunityRoutes(app: Express) {
       const now = new Date().toISOString();
       const run = await storage.insertCommunityRun({
         ...parsed.data,
+        hostId: sessionUser.id, // always use session user, never trust client
         meetingLat: parsed.data.meetingLat ?? null,
         meetingLng: parsed.data.meetingLng ?? null,
         paceMin: parsed.data.paceMin ?? null,
@@ -132,9 +131,9 @@ export function registerCommunityRoutes(app: Express) {
         updatedAt: now,
       });
       // Auto-join host as participant
-      await storage.joinRun(run.id, parsed.data.hostId);
-      const host = await storage.getUserById(parsed.data.hostId);
-      await storage.updateUserStats(parsed.data.hostId, { totalRuns: (host?.totalRuns ?? 0) + 1 });
+      await storage.joinRun(run.id, sessionUser.id);
+      const host = await storage.getUserById(sessionUser.id);
+      await storage.updateUserStats(sessionUser.id, { totalRuns: (host?.totalRuns ?? 0) + 1 });
       res.status(201).json(await enrichRun(run));
     } catch (e) {
       res.status(500).json({ error: String(e) });
@@ -142,10 +141,17 @@ export function registerCommunityRoutes(app: Express) {
   });
 
   // ─── PATCH /api/community/runs/:id ───────────────────────────────────────
-  app.patch("/api/community/runs/:id", async (req, res) => {
+  app.patch("/api/community/runs/:id", requireAuth, async (req, res) => {
     try {
+      const sessionUser = req.user as any;
       const run = await storage.getCommunityRunById(Number(req.params.id));
       if (!run) return res.status(404).json({ error: "Run not found" });
+
+      // Only the host or an admin can edit a run
+      if (run.hostId !== sessionUser.id && sessionUser.role !== "admin") {
+        return res.status(403).json({ error: "You do not have permission to edit this run" });
+      }
+
       const updated = await storage.updateCommunityRun(run.id, { ...req.body, updatedAt: new Date().toISOString() });
       res.json(await enrichRun(updated!));
     } catch (e) {
@@ -154,23 +160,21 @@ export function registerCommunityRoutes(app: Express) {
   });
 
   // ─── POST /api/community/runs/:id/join ───────────────────────────────────
-  app.post("/api/community/runs/:id/join", async (req, res) => {
+  app.post("/api/community/runs/:id/join", requireAuth, async (req, res) => {
     try {
+      const sessionUser = req.user as any;
       const run = await storage.getCommunityRunById(Number(req.params.id));
       if (!run) return res.status(404).json({ error: "Run not found" });
-
-      const { userId } = req.body;
-      if (!userId) return res.status(400).json({ error: "userId required" });
 
       const count = await storage.getParticipantCount(run.id);
       if (run.maxParticipants && count >= run.maxParticipants) {
         return res.status(400).json({ error: "Run is full" });
       }
-      if (await storage.isJoined(run.id, userId)) {
+      if (await storage.isJoined(run.id, sessionUser.id)) {
         return res.status(400).json({ error: "Already joined" });
       }
 
-      await storage.joinRun(run.id, userId);
+      await storage.joinRun(run.id, sessionUser.id);
       const newCount = await storage.getParticipantCount(run.id);
       res.json({ success: true, participantCount: newCount });
     } catch (e) {
@@ -179,12 +183,12 @@ export function registerCommunityRoutes(app: Express) {
   });
 
   // ─── POST /api/community/runs/:id/leave ──────────────────────────────────
-  app.post("/api/community/runs/:id/leave", async (req, res) => {
+  app.post("/api/community/runs/:id/leave", requireAuth, async (req, res) => {
     try {
+      const sessionUser = req.user as any;
       const run = await storage.getCommunityRunById(Number(req.params.id));
       if (!run) return res.status(404).json({ error: "Run not found" });
-      const { userId } = req.body;
-      await storage.leaveRun(run.id, userId);
+      await storage.leaveRun(run.id, sessionUser.id);
       const newCount = await storage.getParticipantCount(run.id);
       res.json({ success: true, participantCount: newCount });
     } catch (e) {
@@ -193,10 +197,10 @@ export function registerCommunityRoutes(app: Express) {
   });
 
   // ─── GET /api/community/runs/:id/joined ──────────────────────────────────
-  app.get("/api/community/runs/:id/joined", async (req, res) => {
+  app.get("/api/community/runs/:id/joined", requireAuth, async (req, res) => {
     try {
-      const userId = Number(req.query.userId);
-      const joined = await storage.isJoined(Number(req.params.id), userId);
+      const sessionUser = req.user as any;
+      const joined = await storage.isJoined(Number(req.params.id), sessionUser.id);
       res.json({ joined });
     } catch (e) {
       res.status(500).json({ error: String(e) });
@@ -204,28 +208,18 @@ export function registerCommunityRoutes(app: Express) {
   });
 
   // ─── POST /api/community/runs/:id/messages ───────────────────────────────
-  app.post("/api/community/runs/:id/messages", async (req, res) => {
+  app.post("/api/community/runs/:id/messages", requireAuth, requirePremium, async (req, res) => {
     try {
+      const sessionUser = req.user as any;
       const run = await storage.getCommunityRunById(Number(req.params.id));
       if (!run) return res.status(404).json({ error: "Run not found" });
 
       const parsed = createMessageSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "Invalid message" });
 
-      // ── Free users cannot use the chat room ───────────────────────────────────
-      const chatter = await storage.getUserById(parsed.data.userId);
-      const chatterIsAdmin = (chatter as any)?.role === 'admin';
-      const chatterIsPremium = (chatter as any)?.isPremium === true;
-      if (!chatterIsAdmin && !chatterIsPremium) {
-        return res.status(403).json({
-          error: "PREMIUM_REQUIRED",
-          message: "Chat is a Premium feature. Upgrade to Premium to join the conversation.",
-        });
-      }
-
       const msg = await storage.insertMessage({
         runId: run.id,
-        userId: parsed.data.userId,
+        userId: sessionUser.id,
         message: parsed.data.message,
         createdAt: new Date().toISOString(),
       });
@@ -237,21 +231,22 @@ export function registerCommunityRoutes(app: Express) {
   });
 
   // ─── POST /api/community/runs/:id/rate ───────────────────────────────────
-  app.post("/api/community/runs/:id/rate", async (req, res) => {
+  app.post("/api/community/runs/:id/rate", requireAuth, async (req, res) => {
     try {
+      const sessionUser = req.user as any;
       const run = await storage.getCommunityRunById(Number(req.params.id));
       if (!run) return res.status(404).json({ error: "Run not found" });
 
       const parsed = createRatingSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "Invalid rating" });
 
-      if (await storage.hasRated(run.id, parsed.data.raterId)) {
+      if (await storage.hasRated(run.id, sessionUser.id)) {
         return res.status(400).json({ error: "Already rated this run" });
       }
 
       const rating = await storage.insertRating({
         runId: run.id,
-        raterId: parsed.data.raterId,
+        raterId: sessionUser.id,
         hostId: run.hostId,
         stars: parsed.data.stars,
         review: parsed.data.review ?? null,

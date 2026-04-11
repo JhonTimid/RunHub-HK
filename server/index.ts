@@ -15,6 +15,11 @@ import passport from "./auth";
 import { registerAuthRoutes } from "./auth-routes";
 import { initDb, pool } from "./storage";
 
+// ── Hard crash if required secrets are missing ────────────────────────────────
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET environment variable is required. Set it in Railway Variables.");
+}
+
 const PgSession = connectPgSimple(session);
 
 const app = express();
@@ -40,13 +45,13 @@ app.use(express.urlencoded({ extended: false }));
 app.use(
   session({
     store: new PgSession({ pool, tableName: "session", createTableIfMissing: true }),
-    secret: process.env.SESSION_SECRET ?? "runhub_hk_super_secret_2026",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (was 30 days)
     },
   })
 );
@@ -116,9 +121,6 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -126,10 +128,6 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     {
