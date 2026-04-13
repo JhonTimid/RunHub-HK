@@ -21,9 +21,7 @@ interface RaceFilters {
 function applyFilters(races: Race[], f: RaceFilters): Race[] {
   const today = new Date().toISOString().slice(0, 10);
   return races.filter((r) => {
-    // Exclude past races by default
     if (!f.showPast && r.date < today && !r.dateTbc) return false;
-
     if (f.search) {
       const q = f.search.toLowerCase();
       if (
@@ -55,8 +53,39 @@ function applyFilters(races: Race[], f: RaceFilters): Race[] {
   });
 }
 
+// ─── Scraper scheduler state ──────────────────────────────────────────────────
+let scraperLastRun: Date | null = null;
+let scraperRunning = false;
+const SCRAPER_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+async function scheduledScrape(label = "scheduled") {
+  if (scraperRunning) {
+    console.log(`[scraper] Already running, skipping ${label} trigger`);
+    return;
+  }
+  scraperRunning = true;
+  console.log(`[scraper] Starting ${label} run...`);
+  try {
+    const result = await runScraper();
+    scraperLastRun = new Date();
+    console.log(`[scraper] ${label} run complete: +${result.added} new, ~${result.updated} updated`);
+  } catch (e) {
+    console.error(`[scraper] ${label} run failed:`, e);
+  } finally {
+    scraperRunning = false;
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express) {
-  // ─── GET /api/races ─────────────────────────────────────────────────────
+
+  // ─── Run scraper once on startup, then every 6 hours ────────────────────
+  // Delay 10s after startup to let DB init + seed finish first
+  setTimeout(() => {
+    scheduledScrape("startup");
+    setInterval(() => scheduledScrape("scheduled"), SCRAPER_INTERVAL_MS);
+  }, 10_000);
+
+  // ─── GET /api/races ──────────────────────────────────────────────────────
   app.get("/api/races", async (req, res) => {
     try {
       const filters: RaceFilters = {
@@ -71,7 +100,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       };
       const all = await storage.getAllRaces();
       const filtered = applyFilters(all, filters);
-      // Sort by date ascending, TBC at end
       filtered.sort((a, b) => {
         if (a.dateTbc && !b.dateTbc) return 1;
         if (!a.dateTbc && b.dateTbc) return -1;
@@ -89,7 +117,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // ─── GET /api/races/:id ─────────────────────────────────────────────────
+  // ─── GET /api/races/:id ──────────────────────────────────────────────────
   app.get("/api/races/:id", async (req, res) => {
     try {
       const race = await storage.getRaceById(Number(req.params.id));
@@ -100,17 +128,48 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // ─── POST /api/scrape ───────────────────────────────────────────────────
+  // ─── POST /api/scrape ── protected manual trigger ────────────────────────
+  // Requires header:  x-scraper-secret: <SCRAPER_SECRET env var>
   app.post("/api/scrape", async (req, res) => {
+    const secret = process.env.SCRAPER_SECRET;
+    if (secret) {
+      const provided = req.headers["x-scraper-secret"];
+      if (!provided || provided !== secret) {
+        return res.status(401).json({ error: "Unauthorized: invalid or missing x-scraper-secret header" });
+      }
+    }
+    if (scraperRunning) {
+      return res.status(409).json({ error: "Scraper is already running, try again shortly" });
+    }
     try {
-      const result = await runScraper();
-      res.json({ success: true, ...result });
+      // Fire and respond immediately so the HTTP request doesn't time out
+      scheduledScrape("manual");
+      res.json({ success: true, message: "Scraper started. Check /api/scrape/status for progress." });
     } catch (e) {
       res.status(500).json({ success: false, error: String(e) });
     }
   });
 
-  // ─── GET /api/stats ─────────────────────────────────────────────────────
+  // ─── GET /api/scrape/status ──────────────────────────────────────────────
+  app.get("/api/scrape/status", async (req, res) => {
+    try {
+      const lastRefresh = await storage.getLastRefresh();
+      res.json({
+        running: scraperRunning,
+        lastRunAt: scraperLastRun?.toISOString() ?? null,
+        lastSuccessfulScrape: lastRefresh?.timestamp ?? null,
+        racesAddedLastRun: lastRefresh?.racesAdded ?? null,
+        racesUpdatedLastRun: lastRefresh?.racesUpdated ?? null,
+        nextRunIn: scraperLastRun
+          ? Math.max(0, Math.round((scraperLastRun.getTime() + SCRAPER_INTERVAL_MS - Date.now()) / 60000)) + " minutes"
+          : "pending startup run",
+      });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // ─── GET /api/stats ──────────────────────────────────────────────────────
   app.get("/api/stats", async (req, res) => {
     try {
       const all = await storage.getAllRaces();
@@ -130,7 +189,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // ─── POST /api/alerts ───────────────────────────────────────────────────
+  // ─── POST /api/alerts ────────────────────────────────────────────────────
   const alertSchema = z.object({
     email: z.string().email(),
     filterType: z.enum(["road", "trail", "mixed", "all"]).optional(),
@@ -157,10 +216,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         verified: false,
         verifyToken,
       } as any);
-
-      // Auto-verify for prototype
       await storage.verifyAlert(alert.id);
-
       res.json({
         success: true,
         message: "Alert registered! You'll receive emails when new races are added.",
