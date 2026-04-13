@@ -10,7 +10,7 @@ export const races = pgTable("races", {
   dateTbc: boolean("date_tbc").notNull().default(false),
   location: text("location").notNull(),
   type: text("type").notNull(),
-  distances: text("distances").notNull(), // JSON array string
+  distances: text("distances").notNull(),
   minDistanceKm: real("min_distance_km"),
   maxDistanceKm: real("max_distance_km"),
   registrationStatus: text("registration_status").notNull().default("unknown"),
@@ -142,12 +142,20 @@ export const users = pgTable("users", {
   googleId: text("google_id"),
   googleAvatar: text("google_avatar"),
   authProvider: text("auth_provider").notNull().default("local"),
-  // ── Subscription & roles ────────────────────────────────────────────────────
-  role: text("role").notNull().default("user"),            // 'user' | 'admin'
+  // ── Subscription & roles ─────────────────────────────────────────────────
+  role: text("role").notNull().default("user"),
   isPremium: boolean("is_premium").notNull().default(false),
-  premiumUntil: text("premium_until"),                     // ISO date string
+  premiumUntil: text("premium_until"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  // ── Profile extras ───────────────────────────────────────────────────────
+  nickname: text("nickname"),
+  gender: text("gender"),                     // 'male' | 'female' | 'non_binary' | 'prefer_not_to_say'
+  profilePicUrl: text("profile_pic_url"),     // external image URL (e.g. uploaded via Cloudinary)
+  stravaUrl: text("strava_url"),              // e.g. https://www.strava.com/athletes/12345
+  runPreferenceType: text("run_preference_type"),   // 'road' | 'trail' | 'mixed' | 'any'
+  runPreferencePace: text("run_preference_pace"),   // e.g. '5:00-6:00'
+  runPreferenceDistance: text("run_preference_distance"), // e.g. '10-21km'
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });

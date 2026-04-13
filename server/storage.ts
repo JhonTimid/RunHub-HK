@@ -76,12 +76,19 @@ export async function initDb() {
       stripe_customer_id TEXT,
       stripe_subscription_id TEXT
     );
-    -- Add new columns to existing users table if they don't exist yet
+    -- Add columns if they don't exist yet (safe for existing DBs)
     ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS gender TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_pic_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS strava_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS run_preference_type TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS run_preference_pace TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS run_preference_distance TEXT;
     -- Instagram columns on races
     ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_post_url TEXT;
     ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_account TEXT;
@@ -170,6 +177,18 @@ export interface IStorage {
   createUser(user: any): Promise<User>;
   insertUser(user: InsertUser): Promise<User>;
   updateUserStats(id: number, data: Partial<User>): Promise<void>;
+  updateUserProfile(id: number, data: {
+    nickname?: string | null;
+    name?: string;
+    bio?: string | null;
+    gender?: string | null;
+    profilePicUrl?: string | null;
+    stravaUrl?: string | null;
+    runPreferenceType?: string | null;
+    runPreferencePace?: string | null;
+    runPreferenceDistance?: string | null;
+    location?: string;
+  }): Promise<User>;
   updateUserGoogleAvatar(id: number, avatar: string): Promise<void>;
   updateUserSubscription(id: number, data: {
     isPremium: boolean;
@@ -265,6 +284,9 @@ export const storage: IStorage = {
   async updateUserStats(id, data) {
     await db.update(users).set(data as any).where(eq(users.id, id));
   },
+  async updateUserProfile(id, data) {
+    return db.update(users).set(data as any).where(eq(users.id, id)).returning().then(r => r[0]);
+  },
   async updateUserGoogleAvatar(id, avatar) {
     await db.update(users).set({ googleAvatar: avatar }).where(eq(users.id, id));
   },
@@ -274,8 +296,7 @@ export const storage: IStorage = {
   async getRunsHostedThisMonth(userId) {
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    const all = await db.select().from(communityRuns)
-      .where(eq(communityRuns.hostId, userId));
+    const all = await db.select().from(communityRuns).where(eq(communityRuns.hostId, userId));
     return all.filter(r => r.createdAt >= monthStart).length;
   },
   async getAllUsersAdmin() {

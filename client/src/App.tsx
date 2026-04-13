@@ -17,9 +17,9 @@ import RunDetailPage from "@/pages/run-detail";
 import HostDashboardPage from "@/pages/host-dashboard";
 import SubscriptionPage from "@/pages/subscription";
 import AdminPage from "@/pages/admin";
+import ProfilePage from "@/pages/profile";
 import NotFound from "@/pages/not-found";
 
-// Redirect to login if not authenticated
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, loading } = useAuth();
   const [, navigate] = useLocation();
@@ -68,6 +68,9 @@ function AppRoutes() {
         </Route>
         <Route path="/admin">
           {() => <ProtectedRoute component={AdminPage} />}
+        </Route>
+        <Route path="/profile">
+          {() => <ProtectedRoute component={ProfilePage} />}
         </Route>
         <Route component={NotFound} />
       </Switch>
