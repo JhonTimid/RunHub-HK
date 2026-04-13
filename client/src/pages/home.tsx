@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, SlidersHorizontal, RefreshCw, TrendingUp, Mountain, MapPin, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -63,7 +63,7 @@ export default function HomePage() {
   const [distPreset, setDistPreset] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [showPast, setShowPast] = useState(false);
-  const [scraping, setScraping] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const preset = DISTANCE_PRESETS[distPreset];
 
@@ -80,7 +80,7 @@ export default function HomePage() {
     queryFn: () => apiRequest("GET", `/api/races?${params.toString()}`).then((r) => r.json()),
   });
 
-  const { data: stats } = useQuery<Stats>({
+  const { data: stats, refetch: refetchStats } = useQuery<Stats>({
     queryKey: ["/api/stats"],
     queryFn: () => apiRequest("GET", "/api/stats").then((r) => r.json()),
   });
@@ -96,20 +96,17 @@ export default function HomePage() {
     setSearch("");
   }
 
+  // Refresh button: re-fetches latest data already in the DB.
+  // The scraper runs automatically every 6 hours in the background.
   async function handleRefresh() {
-    setScraping(true);
+    setRefreshing(true);
     try {
-      const res = await apiRequest("POST", "/api/scrape");
-      const data = await res.json();
-      toast({
-        title: "Data refreshed",
-        description: `${data.added ?? 0} new races added, ${data.updated ?? 0} updated.`,
-      });
-      refetch();
+      await Promise.all([refetch(), refetchStats()]);
+      toast({ title: "Refreshed", description: "Race list is up to date." });
     } catch {
-      toast({ title: "Refresh failed", description: "Could not reach sources.", variant: "destructive" });
+      toast({ title: "Refresh failed", description: "Could not load data. Please try again.", variant: "destructive" });
     } finally {
-      setScraping(false);
+      setRefreshing(false);
     }
   }
 
@@ -126,7 +123,7 @@ export default function HomePage() {
                 Hong Kong Race Calendar
               </h1>
               <p className="text-muted-foreground text-sm md:text-base max-w-lg">
-                Road and trail races across HK — updated daily from RaceFinder, finishers.com, HK100, and more.
+                Road and trail races across HK — updated automatically from Instagram running accounts.
               </p>
             </div>
 
@@ -238,17 +235,17 @@ export default function HomePage() {
             </button>
           )}
 
-          {/* Refresh */}
+          {/* Refresh — re-fetches latest DB data, scraper runs automatically in background */}
           <Button
             variant="ghost"
             size="sm"
             onClick={handleRefresh}
-            disabled={scraping}
+            disabled={refreshing}
             className="ml-auto text-xs gap-1.5 h-8"
             data-testid="button-refresh"
           >
-            <RefreshCw size={13} className={scraping ? "animate-spin" : ""} />
-            {scraping ? "Refreshing…" : "Refresh"}
+            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
         </div>
 
@@ -288,10 +285,9 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-border mt-12 py-6 text-center text-xs text-muted-foreground">
-        <p>Data sourced from <a href="https://hk100ultra.com" target="_blank" rel="noopener" className="hover:text-foreground underline">HK100</a>,{" "}
-          <a href="https://www.finishers.com/en/destinations/asia/hong-kong" target="_blank" rel="noopener" className="hover:text-foreground underline">Finishers.com</a>,{" "}
-          <a href="https://gorunningtours.com/hong-kong-running-races/" target="_blank" rel="noopener" className="hover:text-foreground underline">Go Running Tours</a>.
-          Refreshed daily. Always verify directly with race organisers.
+        <p>
+          Race data sourced from Hong Kong running Instagram accounts, updated automatically every 6 hours.
+          Always verify directly with race organisers.
         </p>
       </footer>
     </div>
