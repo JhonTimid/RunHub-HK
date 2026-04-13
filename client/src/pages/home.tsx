@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, SlidersHorizontal, RefreshCw, TrendingUp, Mountain, MapPin, X } from "lucide-react";
+import { Search, SlidersHorizontal, RefreshCw, TrendingUp, Globe, MapPin, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,8 @@ interface Race {
   date: string;
   dateTbc: boolean;
   location: string;
+  country: string | null;
+  continent: string | null;
   type: string;
   distances: string[];
   registrationStatus: string;
@@ -47,7 +49,23 @@ const DISTANCE_PRESETS = [
   { label: "100km+", min: 100, max: null },
 ];
 
-const TYPE_FILTERS = ["all", "trail", "road", "mixed"];
+const REGION_FILTERS = [
+  { value: "all", label: "All Regions" },
+  { value: "Asia", label: "🌏 Asia" },
+  { value: "Europe", label: "🌍 Europe" },
+  { value: "Americas", label: "🌎 Americas" },
+  { value: "Africa", label: "🌍 Africa" },
+  { value: "Oceania", label: "🌏 Oceania" },
+  { value: "Other", label: "Other" },
+];
+
+const TYPE_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "road", label: "Road" },
+  { value: "trail", label: "Trail" },
+  { value: "mixed", label: "Mixed" },
+];
+
 const STATUS_FILTERS = [
   { value: "all", label: "Any status" },
   { value: "open", label: "Open" },
@@ -59,6 +77,7 @@ const STATUS_FILTERS = [
 export default function HomePage() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
+  const [regionFilter, setRegionFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [distPreset, setDistPreset] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -69,6 +88,7 @@ export default function HomePage() {
 
   const params = new URLSearchParams();
   if (search) params.set("search", search);
+  if (regionFilter !== "all") params.set("continent", regionFilter);
   if (typeFilter !== "all") params.set("type", typeFilter);
   if (preset.min != null) params.set("minKm", String(preset.min));
   if (preset.max != null) params.set("maxKm", String(preset.max));
@@ -76,7 +96,7 @@ export default function HomePage() {
   if (showPast) params.set("showPast", "true");
 
   const { data, isLoading, refetch } = useQuery<{ races: Race[]; total: number }>({
-    queryKey: ["/api/races", search, typeFilter, distPreset, statusFilter, showPast],
+    queryKey: ["/api/races", search, regionFilter, typeFilter, distPreset, statusFilter, showPast],
     queryFn: () => apiRequest("GET", `/api/races?${params.toString()}`).then((r) => r.json()),
   });
 
@@ -86,9 +106,10 @@ export default function HomePage() {
   });
 
   const races = data?.races ?? [];
-  const hasActiveFilters = typeFilter !== "all" || distPreset !== 0 || statusFilter !== "all" || showPast;
+  const hasActiveFilters = regionFilter !== "all" || typeFilter !== "all" || distPreset !== 0 || statusFilter !== "all" || showPast;
 
   function clearFilters() {
+    setRegionFilter("all");
     setTypeFilter("all");
     setDistPreset(0);
     setStatusFilter("all");
@@ -96,8 +117,6 @@ export default function HomePage() {
     setSearch("");
   }
 
-  // Refresh button: re-fetches latest data already in the DB.
-  // The scraper runs automatically every 6 hours in the background.
   async function handleRefresh() {
     setRefreshing(true);
     try {
@@ -120,17 +139,17 @@ export default function HomePage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-foreground mb-1.5 tracking-tight">
-                Hong Kong Race Calendar
+                Global Race Calendar
               </h1>
               <p className="text-muted-foreground text-sm md:text-base max-w-lg">
-                Road and trail races across HK — updated automatically from Instagram running accounts.
+                World Athletics Label Road Races worldwide — marathons, half marathons and long-distance events updated automatically.
               </p>
             </div>
 
             {/* Stats chips */}
             <div className="flex flex-wrap gap-3 shrink-0">
               <StatChip icon={<TrendingUp size={14} />} label="Upcoming" value={stats?.upcoming ?? "—"} />
-              <StatChip icon={<Mountain size={14} />} label="Trail" value={stats?.trail ?? "—"} />
+              <StatChip icon={<Globe size={14} />} label="Total" value={stats?.total ?? "—"} />
               <StatChip icon={<MapPin size={14} />} label="Road" value={stats?.road ?? "—"} />
             </div>
           </div>
@@ -141,7 +160,7 @@ export default function HomePage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search races, locations…"
+              placeholder="Search races, cities, countries…"
               className="pl-10 h-11 bg-muted border-border text-foreground placeholder:text-muted-foreground"
               data-testid="input-search"
             />
@@ -162,24 +181,34 @@ export default function HomePage() {
       <div className="mx-auto max-w-6xl px-4 py-6">
         {/* Filter row */}
         <div className="flex flex-wrap items-center gap-2 mb-5">
-          {/* Type filters */}
-          <div className="flex gap-1.5 flex-wrap" data-testid="filter-type">
-            {TYPE_FILTERS.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTypeFilter(t)}
-                className={cn(
-                  "text-xs font-semibold px-3 py-1.5 rounded-full transition-colors",
-                  typeFilter === t ? "filter-chip-active" : "filter-chip"
-                )}
-                data-testid={`button-type-${t}`}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
-          </div>
 
-          <div className="w-px h-5 bg-border hidden sm:block" />
+          {/* Region dropdown */}
+          <Select value={regionFilter} onValueChange={setRegionFilter}>
+            <SelectTrigger className="w-40 h-8 text-xs bg-muted border-border" data-testid="select-region">
+              <SelectValue placeholder="All Regions" />
+            </SelectTrigger>
+            <SelectContent>
+              {REGION_FILTERS.map((r) => (
+                <SelectItem key={r.value} value={r.value} className="text-xs">
+                  {r.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Race type dropdown */}
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-32 h-8 text-xs bg-muted border-border" data-testid="select-type">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              {TYPE_FILTERS.map((t) => (
+                <SelectItem key={t.value} value={t.value} className="text-xs">
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {/* Distance preset */}
           <Select
@@ -227,7 +256,7 @@ export default function HomePage() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               data-testid="button-clear-filters"
             >
               <X size={12} />
@@ -235,7 +264,7 @@ export default function HomePage() {
             </button>
           )}
 
-          {/* Refresh — re-fetches latest DB data, scraper runs automatically in background */}
+          {/* Refresh */}
           <Button
             variant="ghost"
             size="sm"
@@ -252,9 +281,12 @@ export default function HomePage() {
         {/* Result count */}
         <p className="text-xs text-muted-foreground mb-4" data-testid="text-result-count">
           {isLoading ? "Loading…" : `${data?.total ?? 0} race${data?.total !== 1 ? "s" : ""}`}
+          {regionFilter !== "all" && (
+            <span className="ml-1 text-primary font-medium">in {regionFilter}</span>
+          )}
           {stats?.lastRefreshed && (
             <span className="ml-2 opacity-60">
-              · Last updated {new Date(stats.lastRefreshed).toLocaleDateString("en-HK", { day: "numeric", month: "short" })}
+              · Updated {new Date(stats.lastRefreshed).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
             </span>
           )}
         </p>
@@ -268,7 +300,7 @@ export default function HomePage() {
           </div>
         ) : races.length === 0 ? (
           <div className="text-center py-20">
-            <div className="text-4xl mb-3">🏃</div>
+            <div className="text-4xl mb-3">🌍</div>
             <p className="text-muted-foreground text-sm">No races match your filters.</p>
             <Button variant="ghost" size="sm" onClick={clearFilters} className="mt-3 text-primary">
               Clear filters
@@ -286,8 +318,16 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-border mt-12 py-6 text-center text-xs text-muted-foreground">
         <p>
-          Race data sourced from Hong Kong running Instagram accounts, updated automatically every 6 hours.
-          Always verify directly with race organisers.
+          Race data sourced from{" "}
+          <a
+            href="https://worldathletics.org/competitions/world-athletics-label-road-races"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground"
+          >
+            World Athletics Label Road Races
+          </a>
+          , updated automatically. Always verify directly with race organisers.
         </p>
       </footer>
     </div>
