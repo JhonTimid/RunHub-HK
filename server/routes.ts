@@ -9,6 +9,8 @@ import type { Race } from "../shared/schema";
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface RaceFilters {
   search?: string;
+  continent?: string;
+  country?: string;
   type?: string;
   minDistanceKm?: number;
   maxDistanceKm?: number;
@@ -27,9 +29,16 @@ function applyFilters(races: Race[], f: RaceFilters): Race[] {
       if (
         !r.name.toLowerCase().includes(q) &&
         !r.location.toLowerCase().includes(q) &&
+        !(r.country ?? "").toLowerCase().includes(q) &&
         !(r.description ?? "").toLowerCase().includes(q)
       )
         return false;
+    }
+    if (f.continent && f.continent !== "all") {
+      if (r.continent !== f.continent) return false;
+    }
+    if (f.country) {
+      if (!(r.country ?? "").toLowerCase().includes(f.country.toLowerCase())) return false;
     }
     if (f.type && f.type !== "all") {
       if (r.type !== f.type) return false;
@@ -79,7 +88,6 @@ async function scheduledScrape(label = "scheduled") {
 export async function registerRoutes(httpServer: Server, app: Express) {
 
   // ─── Run scraper once on startup, then every 6 hours ────────────────────
-  // Delay 10s after startup to let DB init + seed finish first
   setTimeout(() => {
     scheduledScrape("startup");
     setInterval(() => scheduledScrape("scheduled"), SCRAPER_INTERVAL_MS);
@@ -90,6 +98,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       const filters: RaceFilters = {
         search: req.query.search as string | undefined,
+        continent: req.query.continent as string | undefined,
+        country: req.query.country as string | undefined,
         type: req.query.type as string | undefined,
         minDistanceKm: req.query.minKm ? Number(req.query.minKm) : undefined,
         maxDistanceKm: req.query.maxKm ? Number(req.query.maxKm) : undefined,
@@ -129,7 +139,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ─── POST /api/scrape ── protected manual trigger ────────────────────────
-  // Requires header:  x-scraper-secret: <SCRAPER_SECRET env var>
   app.post("/api/scrape", async (req, res) => {
     const secret = process.env.SCRAPER_SECRET;
     if (secret) {
@@ -142,7 +151,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return res.status(409).json({ error: "Scraper is already running, try again shortly" });
     }
     try {
-      // Fire and respond immediately so the HTTP request doesn't time out
       scheduledScrape("manual");
       res.json({ success: true, message: "Scraper started. Check /api/scrape/status for progress." });
     } catch (e) {
