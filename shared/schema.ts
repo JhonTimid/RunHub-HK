@@ -9,8 +9,10 @@ export const races = pgTable("races", {
   date: text("date").notNull(),
   dateTbc: boolean("date_tbc").notNull().default(false),
   location: text("location").notNull(),
+  country: text("country"),          // e.g. "Japan"
+  continent: text("continent"),      // e.g. "Asia"
   type: text("type").notNull(),
-  distances: text("distances").notNull(), // JSON array string
+  distances: text("distances").notNull(),
   minDistanceKm: real("min_distance_km"),
   maxDistanceKm: real("max_distance_km"),
   registrationStatus: text("registration_status").notNull().default("unknown"),
@@ -142,10 +144,9 @@ export const users = pgTable("users", {
   googleId: text("google_id"),
   googleAvatar: text("google_avatar"),
   authProvider: text("auth_provider").notNull().default("local"),
-  // ── Subscription & roles ────────────────────────────────────────────────────
-  role: text("role").notNull().default("user"),            // 'user' | 'admin'
+  role: text("role").notNull().default("user"),
   isPremium: boolean("is_premium").notNull().default(false),
-  premiumUntil: text("premium_until"),                     // ISO date string
+  premiumUntil: text("premium_until"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
 });

@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, ilike, gte, lte } from "drizzle-orm";
 import {
   races, alerts, refreshLog, communityRuns,
   runParticipants, runMessages, runRatings, users,
@@ -19,7 +19,7 @@ if (!process.env.DATABASE_URL) {
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 export const db = drizzle(pool);
 
-// ─── Init tables (runs once on startup) ──────────────────────────────────────
+// ─── Init tables ─────────────────────────────────────────────────────────────
 export async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS races (
@@ -28,6 +28,8 @@ export async function initDb() {
       date TEXT NOT NULL,
       date_tbc BOOLEAN NOT NULL DEFAULT false,
       location TEXT NOT NULL,
+      country TEXT,
+      continent TEXT,
       type TEXT NOT NULL,
       distances TEXT NOT NULL,
       min_distance_km REAL,
@@ -43,6 +45,10 @@ export async function initDb() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    ALTER TABLE races ADD COLUMN IF NOT EXISTS country TEXT;
+    ALTER TABLE races ADD COLUMN IF NOT EXISTS continent TEXT;
+    ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_post_url TEXT;
+    ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_account TEXT;
     CREATE TABLE IF NOT EXISTS alerts (
       id SERIAL PRIMARY KEY,
       email TEXT NOT NULL,
@@ -76,15 +82,11 @@ export async function initDb() {
       stripe_customer_id TEXT,
       stripe_subscription_id TEXT
     );
-    -- Add new columns to existing users table if they don't exist yet
     ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
-    -- Instagram columns on races
-    ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_post_url TEXT;
-    ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_account TEXT;
     CREATE TABLE IF NOT EXISTS community_runs (
       id SERIAL PRIMARY KEY,
       host_id INTEGER NOT NULL,
@@ -146,8 +148,18 @@ export async function initDb() {
   `);
 }
 
+export interface RaceFilters {
+  continent?: string;
+  country?: string;
+  type?: string;
+  minDistanceKm?: number;
+  maxDistanceKm?: number;
+  dateFrom?: string;
+  search?: string;
+}
+
 export interface IStorage {
-  getAllRaces(): Promise<Race[]>;
+  getAllRaces(filters?: RaceFilters): Promise<Race[]>;
   getRaceById(id: number): Promise<Race | undefined>;
   insertRace(race: InsertRace): Promise<Race>;
   updateRace(id: number, data: Partial<InsertRace>): Promise<Race | undefined>;
@@ -202,8 +214,19 @@ export interface IStorage {
 }
 
 export const storage: IStorage = {
-  async getAllRaces() {
-    return db.select().from(races);
+  async getAllRaces(filters: RaceFilters = {}) {
+    let all = await db.select().from(races);
+    if (filters.continent) all = all.filter(r => r.continent === filters.continent);
+    if (filters.country) all = all.filter(r => r.country?.toLowerCase().includes(filters.country!.toLowerCase()));
+    if (filters.type) all = all.filter(r => r.type === filters.type);
+    if (filters.minDistanceKm != null) all = all.filter(r => (r.maxDistanceKm ?? 0) >= filters.minDistanceKm!);
+    if (filters.maxDistanceKm != null) all = all.filter(r => (r.minDistanceKm ?? 999) <= filters.maxDistanceKm!);
+    if (filters.dateFrom) all = all.filter(r => r.date >= filters.dateFrom!);
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      all = all.filter(r => r.name.toLowerCase().includes(q) || r.location.toLowerCase().includes(q));
+    }
+    return all.sort((a, b) => a.date.localeCompare(b.date));
   },
   async getRaceById(id) {
     return db.select().from(races).where(eq(races.id, id)).then(r => r[0]);
@@ -274,8 +297,7 @@ export const storage: IStorage = {
   async getRunsHostedThisMonth(userId) {
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    const all = await db.select().from(communityRuns)
-      .where(eq(communityRuns.hostId, userId));
+    const all = await db.select().from(communityRuns).where(eq(communityRuns.hostId, userId));
     return all.filter(r => r.createdAt >= monthStart).length;
   },
   async getAllUsersAdmin() {
