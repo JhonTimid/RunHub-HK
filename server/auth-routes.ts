@@ -1,7 +1,25 @@
 import { Express, Request, Response } from "express";
+import rateLimit from "express-rate-limit";
 import passport from "./auth";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
+
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,                  // max 10 attempts per window
+  message: { error: "Too many login attempts. Please try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,                   // max 5 registrations per hour per IP
+  message: { error: "Too many accounts created from this IP. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export function registerAuthRoutes(app: Express) {
   // ── GET /api/auth/me ── returns current session user ────────────────────────
@@ -21,6 +39,8 @@ export function registerAuthRoutes(app: Express) {
         location: u.location,
         totalRuns: u.totalRuns,
         avgRating: u.avgRating,
+        isPremium: u.isPremium,
+        role: u.role,
       });
     } else {
       res.status(401).json({ user: null });
@@ -28,7 +48,7 @@ export function registerAuthRoutes(app: Express) {
   });
 
   // ── POST /api/auth/register ── email + password sign-up ─────────────────────
-  app.post("/api/auth/register", async (req: Request, res: Response) => {
+  app.post("/api/auth/register", registerLimiter, async (req: Request, res: Response) => {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email and password are required." });
@@ -47,7 +67,8 @@ export function registerAuthRoutes(app: Express) {
       const colors = ["#22c55e", "#3b82f6", "#f97316", "#a855f7", "#ec4899", "#14b8a6"];
       const color = colors[Math.floor(Math.random() * colors.length)];
       const base = email.split("@")[0].replace(/[^a-z0-9]/gi, "_").toLowerCase();
-      const handle = base + "_hk";
+      // Add random suffix to avoid handle collisions between users with same email prefix
+      const handle = `${base}_hk_${Math.floor(Math.random() * 9999)}`;
 
       const user = await storage.createUser({
         name,
@@ -77,6 +98,8 @@ export function registerAuthRoutes(app: Express) {
           avatarColor: user.avatarColor,
           googleAvatar: user.googleAvatar,
           authProvider: user.authProvider,
+          isPremium: user.isPremium,
+          role: user.role,
         });
       });
     } catch (e) {
@@ -85,7 +108,7 @@ export function registerAuthRoutes(app: Express) {
   });
 
   // ── POST /api/auth/login ── email + password login ───────────────────────────
-  app.post("/api/auth/login", (req: Request, res: Response, next) => {
+  app.post("/api/auth/login", loginLimiter, (req: Request, res: Response, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);
       if (!user) return res.status(401).json({ error: info?.message ?? "Login failed." });
@@ -100,6 +123,8 @@ export function registerAuthRoutes(app: Express) {
           avatarColor: user.avatarColor,
           googleAvatar: user.googleAvatar,
           authProvider: user.authProvider,
+          isPremium: user.isPremium,
+          role: user.role,
         });
       });
     })(req, res, next);
