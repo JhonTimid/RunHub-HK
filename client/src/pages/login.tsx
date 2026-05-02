@@ -32,9 +32,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // If already logged in redirect to race calendar
+  // If already logged in redirect to community feed
   useEffect(() => {
-    if (user) navigate("/races");
+    if (user) navigate("/community");
   }, [user]);
 
   // Check for Google error in URL
@@ -70,7 +70,7 @@ export default function LoginPage() {
         await register(form.name, form.email, form.password);
         toast({ title: "Account created!", description: `Welcome, ${form.name}!` });
       }
-      navigate("/races");
+      navigate("/community");
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {

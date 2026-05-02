@@ -123,7 +123,7 @@ export function registerAuthRoutes(app: Express) {
     "/api/auth/google/callback",
     passport.authenticate("google", { failureRedirect: "/#/login?error=google_failed" }),
     (_req: Request, res: Response) => {
-      res.redirect("/#/races");
+      res.redirect("/#/community");
     }
   );
 }

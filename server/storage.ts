@@ -1,12 +1,11 @@
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, desc, ilike, gte, lte } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
-  races, alerts, refreshLog, communityRuns,
+  communityRuns,
   runParticipants, runMessages, runRatings, users,
 } from "../shared/schema";
 import type {
-  Race, InsertRace, Alert, InsertAlert, RefreshLog,
   CommunityRun, InsertCommunityRun, RunParticipant,
   RunMessage, InsertRunMessage, RunRating, InsertRunRating,
   User, InsertUser,
@@ -22,44 +21,6 @@ export const db = drizzle(pool);
 // ─── Init tables ─────────────────────────────────────────────────────────────
 export async function initDb() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS races (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      date TEXT NOT NULL,
-      date_tbc BOOLEAN NOT NULL DEFAULT false,
-      location TEXT NOT NULL,
-      country TEXT,
-      continent TEXT,
-      type TEXT NOT NULL,
-      distances TEXT NOT NULL,
-      min_distance_km REAL,
-      max_distance_km REAL,
-      registration_status TEXT NOT NULL DEFAULT 'unknown',
-      registration_url TEXT,
-      source_url TEXT,
-      source_name TEXT,
-      description TEXT,
-      is_new BOOLEAN NOT NULL DEFAULT true,
-      instagram_post_url TEXT,
-      instagram_account TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    ALTER TABLE races ADD COLUMN IF NOT EXISTS country TEXT;
-    ALTER TABLE races ADD COLUMN IF NOT EXISTS continent TEXT;
-    ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_post_url TEXT;
-    ALTER TABLE races ADD COLUMN IF NOT EXISTS instagram_account TEXT;
-    CREATE TABLE IF NOT EXISTS alerts (
-      id SERIAL PRIMARY KEY,
-      email TEXT NOT NULL,
-      filter_type TEXT,
-      filter_min_distance_km REAL,
-      filter_max_distance_km REAL,
-      filter_date_from TEXT,
-      created_at TEXT NOT NULL,
-      verified BOOLEAN NOT NULL DEFAULT false,
-      verify_token TEXT
-    );
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -76,17 +37,8 @@ export async function initDb() {
       google_id TEXT,
       google_avatar TEXT,
       auth_provider TEXT NOT NULL DEFAULT 'local',
-      role TEXT NOT NULL DEFAULT 'user',
-      is_premium BOOLEAN NOT NULL DEFAULT false,
-      premium_until TEXT,
-      stripe_customer_id TEXT,
-      stripe_subscription_id TEXT
+      role TEXT NOT NULL DEFAULT 'user'
     );
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT false;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TEXT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
     CREATE TABLE IF NOT EXISTS community_runs (
       id SERIAL PRIMARY KEY,
       host_id INTEGER NOT NULL,
@@ -130,14 +82,6 @@ export async function initDb() {
       review TEXT,
       created_at TEXT NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS refresh_log (
-      id SERIAL PRIMARY KEY,
-      timestamp TEXT NOT NULL,
-      races_added INTEGER NOT NULL DEFAULT 0,
-      races_updated INTEGER NOT NULL DEFAULT 0,
-      status TEXT NOT NULL,
-      message TEXT
-    );
     CREATE TABLE IF NOT EXISTS session (
       sid VARCHAR NOT NULL COLLATE "default",
       sess JSON NOT NULL,
@@ -148,33 +92,7 @@ export async function initDb() {
   `);
 }
 
-export interface RaceFilters {
-  continent?: string;
-  country?: string;
-  type?: string;
-  minDistanceKm?: number;
-  maxDistanceKm?: number;
-  dateFrom?: string;
-  search?: string;
-}
-
 export interface IStorage {
-  getAllRaces(filters?: RaceFilters): Promise<Race[]>;
-  getRaceById(id: number): Promise<Race | undefined>;
-  insertRace(race: InsertRace): Promise<Race>;
-  updateRace(id: number, data: Partial<InsertRace>): Promise<Race | undefined>;
-  deleteRace(id: number): Promise<void>;
-  getRaceByName(name: string): Promise<Race | undefined>;
-
-  getAllAlerts(): Promise<Alert[]>;
-  insertAlert(alert: Omit<InsertAlert, "createdAt"> & { createdAt: string; verified: boolean; verifyToken: string }): Promise<Alert>;
-  getAlertByToken(token: string): Promise<Alert | undefined>;
-  verifyAlert(id: number): Promise<void>;
-  deleteAlert(id: number): Promise<void>;
-
-  logRefresh(entry: Omit<RefreshLog, "id">): Promise<void>;
-  getLastRefresh(): Promise<RefreshLog | undefined>;
-
   getAllUsers(): Promise<User[]>;
   getUserById(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -183,16 +101,7 @@ export interface IStorage {
   insertUser(user: InsertUser): Promise<User>;
   updateUserStats(id: number, data: Partial<User>): Promise<void>;
   updateUserGoogleAvatar(id: number, avatar: string): Promise<void>;
-  updateUserSubscription(id: number, data: {
-    isPremium: boolean;
-    premiumUntil: string | null;
-    stripeCustomerId?: string | null;
-    stripeSubscriptionId?: string | null;
-  }): Promise<void>;
   getRunsHostedThisMonth(userId: number): Promise<number>;
-  getAllUsersAdmin(): Promise<User[]>;
-  setUserRole(id: number, role: string): Promise<void>;
-  getUserByStripeCustomerId(customerId: string): Promise<User | undefined>;
 
   getAllCommunityRuns(opts?: { hostId?: number; status?: string }): Promise<CommunityRun[]>;
   getCommunityRunById(id: number): Promise<CommunityRun | undefined>;
@@ -214,59 +123,6 @@ export interface IStorage {
 }
 
 export const storage: IStorage = {
-  async getAllRaces(filters: RaceFilters = {}) {
-    let all = await db.select().from(races);
-    if (filters.continent) all = all.filter(r => r.continent === filters.continent);
-    if (filters.country) all = all.filter(r => r.country?.toLowerCase().includes(filters.country!.toLowerCase()));
-    if (filters.type) all = all.filter(r => r.type === filters.type);
-    if (filters.minDistanceKm != null) all = all.filter(r => (r.maxDistanceKm ?? 0) >= filters.minDistanceKm!);
-    if (filters.maxDistanceKm != null) all = all.filter(r => (r.minDistanceKm ?? 999) <= filters.maxDistanceKm!);
-    if (filters.dateFrom) all = all.filter(r => r.date >= filters.dateFrom!);
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      all = all.filter(r => r.name.toLowerCase().includes(q) || r.location.toLowerCase().includes(q));
-    }
-    return all.sort((a, b) => a.date.localeCompare(b.date));
-  },
-  async getRaceById(id) {
-    return db.select().from(races).where(eq(races.id, id)).then(r => r[0]);
-  },
-  async getRaceByName(name) {
-    return db.select().from(races).where(eq(races.name, name)).then(r => r[0]);
-  },
-  async insertRace(race) {
-    return db.insert(races).values(race).returning().then(r => r[0]);
-  },
-  async updateRace(id, data) {
-    return db.update(races).set(data).where(eq(races.id, id)).returning().then(r => r[0]);
-  },
-  async deleteRace(id) {
-    await db.delete(races).where(eq(races.id, id));
-  },
-
-  async getAllAlerts() {
-    return db.select().from(alerts);
-  },
-  async insertAlert(alert) {
-    return db.insert(alerts).values(alert as any).returning().then(r => r[0]);
-  },
-  async getAlertByToken(token) {
-    return db.select().from(alerts).where(eq(alerts.verifyToken, token)).then(r => r[0]);
-  },
-  async verifyAlert(id) {
-    await db.update(alerts).set({ verified: true, verifyToken: null }).where(eq(alerts.id, id));
-  },
-  async deleteAlert(id) {
-    await db.delete(alerts).where(eq(alerts.id, id));
-  },
-
-  async logRefresh(entry) {
-    await db.insert(refreshLog).values(entry);
-  },
-  async getLastRefresh() {
-    return db.select().from(refreshLog).orderBy(desc(refreshLog.id)).limit(1).then(r => r[0]);
-  },
-
   async getAllUsers() {
     return db.select().from(users);
   },
@@ -291,23 +147,11 @@ export const storage: IStorage = {
   async updateUserGoogleAvatar(id, avatar) {
     await db.update(users).set({ googleAvatar: avatar }).where(eq(users.id, id));
   },
-  async updateUserSubscription(id, data) {
-    await db.update(users).set(data as any).where(eq(users.id, id));
-  },
   async getRunsHostedThisMonth(userId) {
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const all = await db.select().from(communityRuns).where(eq(communityRuns.hostId, userId));
     return all.filter(r => r.createdAt >= monthStart).length;
-  },
-  async getAllUsersAdmin() {
-    return db.select().from(users);
-  },
-  async setUserRole(id, role) {
-    await db.update(users).set({ role } as any).where(eq(users.id, id));
-  },
-  async getUserByStripeCustomerId(customerId) {
-    return db.select().from(users).where(eq(users.stripeCustomerId, customerId)).then(r => r[0]);
   },
 
   async getAllCommunityRuns(opts = {}) {

@@ -5,13 +5,6 @@ import { useAuth } from "@/context/AuthContext";
 
 const FEATURES = [
   {
-    icon: Calendar,
-    title: "Hong Kong Race Calendar",
-    desc: "Every road & trail race in HK — updated daily from RaceFinder, Finishers.com & HK100.",
-    color: "text-blue-400",
-    bg: "bg-blue-400/10",
-  },
-  {
     icon: Users,
     title: "Community Runs",
     desc: "Join or host informal group runs — trail sessions, tempo runs, recovery jogs and more.",
@@ -26,16 +19,22 @@ const FEATURES = [
     bg: "bg-amber-400/10",
   },
   {
-    icon: Zap,
-    title: "Race Alerts",
-    desc: "Get notified when new races drop — filter by type, distance and date.",
+    icon: Route,
+    title: "Route Discovery",
+    desc: "Explore new trails and road routes across Hong Kong with local experts.",
+    color: "text-blue-400",
+    bg: "bg-blue-400/10",
+  },
+  {
+    icon: Mountain,
+    title: "Personal Profile",
+    desc: "Track your group run history and build your reputation as a runner or host.",
     color: "text-purple-400",
     bg: "bg-purple-400/10",
   },
 ];
 
 const STATS = [
-  { value: "50+", label: "Races tracked" },
   { value: "5", label: "Run types" },
   { value: "HK", label: "Based in" },
 ];
@@ -44,9 +43,9 @@ export default function LandingPage() {
   const { user, loading } = useAuth();
   const [, navigate] = useLocation();
 
-  // Redirect logged-in users straight to race calendar
+  // Redirect logged-in users straight to community feed
   useEffect(() => {
-    if (!loading && user) navigate("/races");
+    if (!loading && user) navigate("/community");
   }, [user, loading]);
 
   return (
@@ -89,13 +88,13 @@ export default function LandingPage() {
         {/* Headline */}
         <h1 className="font-display font-bold text-foreground leading-tight mb-4 max-w-2xl"
           style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)" }}>
-          Find races.{" "}
-          <span className="text-primary">Host runs.</span>{" "}
+          Host runs.{" "}
+          <span className="text-primary">Join the community.</span>{" "}
           Connect with runners.
         </h1>
 
         <p className="text-muted-foreground text-base sm:text-lg max-w-xl mb-8 leading-relaxed">
-          The community platform for Hong Kong's running scene — race discovery, group runs, and host ratings all in one place.
+          The community platform for Hong Kong's running scene — group runs, host ratings, and personal profiles all in one place.
         </p>
 
         {/* CTAs */}

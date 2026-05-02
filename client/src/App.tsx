@@ -8,15 +8,10 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 
 import LandingPage from "@/pages/landing";
 import LoginPage from "@/pages/login";
-import HomePage from "@/pages/home";
-import RaceDetailPage from "@/pages/race-detail";
-import AlertsPage from "@/pages/alerts";
 import CommunityFeedPage from "@/pages/community-feed";
 import CreateRunPage from "@/pages/create-run";
 import RunDetailPage from "@/pages/run-detail";
 import HostDashboardPage from "@/pages/host-dashboard";
-import SubscriptionPage from "@/pages/subscription";
-import AdminPage from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 // Redirect to login if not authenticated
@@ -46,11 +41,6 @@ function AppRoutes() {
       <Switch>
         <Route path="/" component={LandingPage} />
         <Route path="/login" component={LoginPage} />
-        <Route path="/races" component={HomePage} />
-        <Route path="/race/:id" component={RaceDetailPage} />
-        <Route path="/alerts">
-          {() => <ProtectedRoute component={AlertsPage} />}
-        </Route>
         <Route path="/community">
           {() => <ProtectedRoute component={CommunityFeedPage} />}
         </Route>
@@ -62,12 +52,6 @@ function AppRoutes() {
         </Route>
         <Route path="/community/dashboard">
           {() => <ProtectedRoute component={HostDashboardPage} />}
-        </Route>
-        <Route path="/subscription">
-          {() => <ProtectedRoute component={SubscriptionPage} />}
-        </Route>
-        <Route path="/admin">
-          {() => <ProtectedRoute component={AdminPage} />}
         </Route>
         <Route component={NotFound} />
       </Switch>
